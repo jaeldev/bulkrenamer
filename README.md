@@ -31,7 +31,7 @@ It makes an executable called 'bulkrenamer'. You can name it however you like.
 
 ## License
 
-This project is licensed under GNU General Public License version 2.0. Please see the LICENSE file for license details.
+This project is licensed under GNU General Public License version 3.0. Please see the LICENSE file for license details.
 
 ## Thank You
 Thank you for checking out Bulk Renamer. I hope you find this cool! I don't know where is to receive feedback, or suggestions, but they are welcome.
