@@ -11,6 +11,7 @@ Bulk Renamer help you rename multiple files at once, and with a preview so you c
 - Replaces spaces in names with underscores
 - Optionally add custom prefix
 - Optionally add sequential numbering, starting at `001`
+- Handles file name collisions
 - Previews the new name and asks for confirmation before renaming
 
 ## Usage
