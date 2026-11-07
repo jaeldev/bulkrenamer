@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <cctype>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -65,43 +66,73 @@ int main(){
 	std::cout << "\nPreview:\n";
 	std::cout << "\n";
     std::error_code dir_ec;
-    std::vector<FilePair> batchList;
+    std::vector<fs::path> rawFiles;
     int counter = 1;
     for (const auto& item : fs::directory_iterator(folderPath, dir_ec)){
+    	if (dir_ec) break;
     	if (!item.is_regular_file()) continue;
         const fs::path& oldFilePath = item.path();
         std::string oldFileName = oldFilePath.filename().string();
 // Skip hidden file
         if (!oldFileName.empty() && oldFileName[0] == '.') continue;
-        std::string fileName = oldFilePath.stem().string();
-        std::string extension = oldFilePath.extension().string();
+
+		rawFiles.push_back(item.path());
+
+		if (dir_ec){
+			std::cerr << "Error: Encounter error while reading: " << strFolderPath << "\n";
+		}
+    }
+
+    std::sort(rawFiles.begin(), rawFiles.end());
+    
+    std::vector<FilePair> batchList;
+    for (const auto& oldFilePath : rawFiles){
+    	std::string oldFileName = oldFilePath.filename().string();
+    	std::string fileName = oldFilePath.stem().string();
+    	std::string extension = oldFilePath.extension().string();
 // Replace with underscore, add prefix, and numbering
-        std::replace(fileName.begin(), fileName.end(), ' ', '_');
+		std::replace(fileName.begin(), fileName.begin(), ' ', '_');
 
-        std::string newFileName;
-        newFileName.reserve(prefix.size() + fileName.size() + extension.size() + 8);
-// Adjust file name according to user options 
-        if (!prefix.empty()) {
-            newFileName += prefix + "_";
-        }
+		std::string newFileName;
+		newFileName.reserve(prefix.size() + fileName.size() + extension.size() + 8);
+// Adjust file name according to user option
+		if (!prefix.empty()){
+			newFileName += prefix + "_";
+		}
 
-        if (useNumbering) {
-            char numBuf[12];
-            snprintf(numBuf, sizeof(numBuf), "%03d_", counter++);
-            newFileName += numBuf;
-        }
+		if (useNumbering){
+			char numBuf[12];
+			snprintf(numBuf, sizeof(numBuf), "%03d_", counter++);
+		}
 
-        newFileName += fileName + extension;
-        fs::path newFilePath = oldFilePath.parent_path() / newFileName;
+		newFileName += fileName + extension;
+		fs::path newFilePath = oldFilePath.parent_path() / newFileName;
 
 // Prevent string reallocation
-        batchList.push_back({oldFilePath, std::move(newFilePath), std::move(oldFileName), std::move(newFileName)});
+		batchList.push_back({oldFilePath, std::move(newFilePath), std::move(oldFileName), std::move(newFileName)});
+		
     }
+    
+// Check and fix file name collision
+    	std::unordered_set<std::string> usedPaths;
+    	usedPaths.reserve(batchList.size() * 2);
+    	for (auto& item : batchList){
+    		fs::path basePath = item.newPath;
+    		std::string stem = basePath.stem().string();
+    		std::string ext = basePath.extension().string();
+    		int collisionCounter = 1;
+    		while ((fs::exists(item.newPath) && item.oldPath != item.newPath) || usedPaths.count(item.newPath.string()) > 0){
+    			std::string newFileName = stem + "_" + std::to_string(collisionCounter++);
+    			item.newPath = basePath.parent_path() / newFileName;
+    			item.newName = newFileName;
+    		}
+    		usedPaths.insert(item.newPath.string());
+    	}
     
     for (const auto& item : batchList){
         std::cout << item.oldName << " -> " << item.newName << '\n';
     }
-
+    
     if (!getUserChoice("\nDo you want to apply changes?")){
         std::cout << "Canceling...\n";
         return 0;
@@ -116,6 +147,6 @@ int main(){
         }
     }
 
-    std::cout << "Done.\n";
+    std::cout << "Bulk renamer ended...\n";
     return 0;
 }
