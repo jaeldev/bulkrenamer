@@ -91,7 +91,7 @@ int main(){
     	std::string fileName = oldFilePath.stem().string();
     	std::string extension = oldFilePath.extension().string();
 // Replace with underscore, add prefix, and numbering
-		std::replace(fileName.begin(), fileName.begin(), ' ', '_');
+		std::replace(fileName.begin(), fileName.end(), ' ', '_');
 
 		std::string newFileName;
 		newFileName.reserve(prefix.size() + fileName.size() + extension.size() + 8);
@@ -103,6 +103,7 @@ int main(){
 		if (useNumbering){
 			char numBuf[12];
 			snprintf(numBuf, sizeof(numBuf), "%03d_", counter++);
+			newFileName += numBuf;
 		}
 
 		newFileName += fileName + extension;
@@ -122,7 +123,7 @@ int main(){
     		std::string ext = basePath.extension().string();
     		int collisionCounter = 1;
     		while ((fs::exists(item.newPath) && item.oldPath != item.newPath) || usedPaths.count(item.newPath.string()) > 0){
-    			std::string newFileName = stem + "_" + std::to_string(collisionCounter++);
+    			std::string newFileName = stem + "_" + std::to_string(collisionCounter++) + ext;
     			item.newPath = basePath.parent_path() / newFileName;
     			item.newName = newFileName;
     		}
