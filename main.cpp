@@ -4,83 +4,125 @@
 #include <system_error>
 #include <string>
 #include <vector>
-#include <cctype>
 #include <unordered_set>
+#include <cstdio>
+#include <cstdlib>
+
+#ifndef VERSION_STRING
+#define VERSION_STRING "2.0.0"
+#endif
 
 namespace fs = std::filesystem;
 
 struct FilePair{
-        fs::path oldPath;
-        fs::path newPath;
-        std::string oldName;
-        std::string newName;
-    };
+	fs::path oldPath;
+	fs::path newPath;
+	std::string oldName;
+	std::string newName;
+};
 
 // Helping function
-bool getUserChoice(const std::string& prompt, bool defaultResponse = true){
-    while (true){
-    	std::string choice;
-    	std::cout << prompt << " (y/n): " << std::flush;
-    	if (!(std::cin >> choice)) return defaultResponse;    
-    	std::transform(choice.begin(), choice.end(), choice.begin(), [](unsigned char c){
-    	    return std::tolower(c);
-    	});
-    	if (choice == "y" || choice == "yes") return true;
-    	if (choice == "n" || choice == "no") return false;
-    	std::cout << "Invalid choice. Enter 'y' or 'n'.\n";
-    }
+static void printUsage(std::ostream& out){
+	out << "Usage: bulkrenamer --dir <path> [--prefix <text>] [--number] [--execute]\n"
+	"Options:\n"
+	"-d, --dir <path>     Folder with files to rename (required)\n"
+	"-p, --prefix <text>  Add <text> to start of each name\n"
+	"-n, --number         Add sequential numbering (001, 002, ...)\n"
+	"-e, --execute        Apply the changes (default is preview only)\n"
+	"-v, --version        Show version\n"
+	"-h, --help           Show this help\n";
 }
 
-int main(){
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(nullptr);
-
-    std::cout << "Bulk renamer started...\n";
-// Enter folder path
-    std::string strFolderPath;
-    std::cout << "Enter folder path: " << std::flush;
-    std::cin >> std::ws; 
-    if (!std::getline(std::cin, strFolderPath) || strFolderPath.empty()){
-        std::cout << "Folder cannot be empty.\n";
+int main(int argc, char* argv[]){
+    if (argc <= 1){
+		printUsage(std::cerr);
         return 1;
-    }
-    fs::path folderPath = strFolderPath;
-// Verify if the path is valid
-    if (!fs::exists(folderPath) || !fs::is_directory(folderPath)){
-        std::cerr << "Error: Path does not exist or not a directory.\n";
-        return 1;
-    }
-// [Options]
-// 1.Prefix
+   	}
+   	
+// Enter folder path and prefix
+    fs::path folderPath;
     std::string prefix;
-    if (getUserChoice("Do you want to add a custom prefix?")){
-        std::cout << "Enter prefix: " << std::flush;
-        std::cin >> prefix;
+    bool useNumbering = false;
+    bool preview = true;
+// Loop through arguments for flags
+    for (int i = 1; i < argc; i++){
+    	std::string arg = argv[i];
+    		if (arg == "--help" || arg == "-h"){
+    			printUsage(std::cout);
+    			return 0;
+    		}
+    		else if (arg == "--version" || arg == "-v"){
+    			std::cout << "bulkrenamer " << VERSION_STRING << "\n";
+    			return 0;
+    		}
+    		else if ((arg == "--dir" || arg == "-d") && i + 1 < argc){
+    		folderPath = argv[++i];
+// Handle when user give path with '~' in quotes to make full path
+    		std::string pathStr = folderPath.string();
+    		const char* homeDir = std::getenv("HOME");
+    		if (homeDir && !pathStr.empty() && pathStr[0] == '~') {
+    			if (pathStr == "~"){
+    				folderPath = homeDir;
+    			}
+    			else if (pathStr.rfind("~/", 0) == 0){
+    				folderPath = fs::path(homeDir) / pathStr.substr(2);
+    			}
+    		}
+    	}
+    	else if ((arg == "--prefix" || arg == "-p") && i + 1 < argc){
+    		prefix = argv[++i];
+    	}
+    	else if (arg == "--number" || arg == "-n"){
+    		useNumbering = true;
+    	}
+    	else if (arg == "--execute" || arg == "-e"){
+    		preview = false;
+    	}
+    	else{
+// Handle unknown arguments to prevent crash
+    		std::cerr << "Error: Unknown or incomplete flag '" << arg << "'\n";
+    		printUsage(std::cerr);
+    		return 1;
+    	}
     }
 
-// 2.Numbering
-    bool useNumbering = getUserChoice("Do you want to add sequential numbering?");
-    std::cout << "Listing & processing...\n";
-
-// Calculate original and renamed names for preview
-	std::cout << "\nPreview:\n";
-	std::cout << "\n";
+    if (folderPath.empty()){
+    	std::cerr << "Error: --dir <path> is required.\n";
+    	printUsage(std::cerr);
+    	return 1;
+    }
+    
+    std::error_code check_ec;
+    if (!fs::is_directory(folderPath, check_ec)){
+    	std::cerr << "Error: Path does not exist or is not a directory.\n";
+    	return 1;
+    }
+    
+// Collect regular and not hidden files
     std::error_code dir_ec;
     std::vector<fs::path> rawFiles;
-    int counter = 1;
-    for (const auto& item : fs::directory_iterator(folderPath, dir_ec)){
-    	if (dir_ec) break;
-    	if (!item.is_regular_file()) continue;
-        const fs::path& oldFilePath = item.path();
-        std::string oldFileName = oldFilePath.filename().string();
+    fs::directory_iterator it(folderPath, dir_ec);
+    const fs::directory_iterator end;
+    for (; !dir_ec && it != end; it.increment(dir_ec)){
+    	std::error_code type_ec;
+    	if (!it->is_regular_file(type_ec)) continue;
+        std::string name = it->path().filename().string();
 // Skip hidden file
-        if (!oldFileName.empty() && oldFileName[0] == '.') continue;
+        if (!name.empty() && name[0] == '.') continue;
 
-		rawFiles.push_back(item.path());
+		rawFiles.push_back(it->path());
+    }
 
-		if (dir_ec){
-			std::cerr << "Error: Encounter error while reading: " << strFolderPath << "\n";
-		}
+    if (dir_ec){
+        std::cerr << "Error: Encounter error while reading: " << folderPath.string() << "\n";
+        return 1;
+    }
+
+    int counter = 1;
+
+    if (rawFiles.empty()){
+    	std::cout << "No files to rename.\n";
+    	return 0;
     }
 
     std::sort(rawFiles.begin(), rawFiles.end());
@@ -111,7 +153,6 @@ int main(){
 
 // Prevent string reallocation
 		batchList.push_back({oldFilePath, std::move(newFilePath), std::move(oldFileName), std::move(newFileName)});
-		
     }
     
 // Check and fix file name collision
@@ -129,25 +170,30 @@ int main(){
     		}
     		usedPaths.insert(item.newPath.string());
     	}
-    
+	
+    std::cout << "Preview:\n";
     for (const auto& item : batchList){
         std::cout << item.oldName << " -> " << item.newName << '\n';
     }
-    
-    if (!getUserChoice("\nDo you want to apply changes?")){
-        std::cout << "Canceling...\n";
-        return 0;
+
+    if (preview){
+    	std::cout << "Did not write changes to disk. Pls. write flag '--execute' or '-e' in order to add changes.\n";
+    	return 0;
     }
 
-    std::cout << "Applying changes...\n";
+    std::size_t renamed = 0;
     for (const auto& item : batchList){
+        if (item.oldPath == item.newPath) continue;
+        
         std::error_code ec;
         fs::rename(item.oldPath, item.newPath, ec);
         if (ec) {
-            std::cerr << "Fail: " << item.oldName << " -> " << ec.message() << '\n';
+            std::cerr << "\nFail: " << item.oldName << " -> " << ec.message() << '\n';
+            std::cerr << "Stopping after renaming " << renamed << " of " << batchList.size() << " file(s).\n";
+            return 1;
         }
+        renamed++;
     }
 
-    std::cout << "Bulk renamer ended...\n";
     return 0;
 }
