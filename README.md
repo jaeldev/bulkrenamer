@@ -25,9 +25,38 @@ It makes an executable called 'bulkrenamer'. You can name it however you like.
 
 ## Usage
 
-```bash
-bulkrenamer --dir <path> [--prefix <text>] [--number] [--execute]
-```
+The image show how to use it:
+
+![Help example](docs/helpexample.png)
+
+New names are built on this order: prefix + number + original name (space replace with underscore) + extension
+
+**Examples:**
+Imagine folder vacation have 3 files named: `beach day.jpg`, `IMG 0042.jpg`, and `vacation plan.txt`.
+
+**Preview:**
+
+![Preview example](docs/previewexample.png)
+
+Apply the changes using `--execute`
+
+![Execute example](docs/executeexample.png)
+
+![Result](docs/result.png)
+
+**Name collisions:**
+If new name already exist, a counter is added instead of overwrite to prevent data loss.
+
+![Collision example](docs/collisionexample.png)
+
+## Good To Know
+- Only files directly inside the folder is renamed. Subfolders is not search.
+- If a rename fails during process, Bulk Renamer stops and reports how many files are already renamed. It does not undo change.
+- Numbers greater than 999 become four digits (1000_...).
+- The collision check is case sensitive, so on case insensitive file system, names that differ only by letter case could still error.
+- It has been developed and tested on Linux.
+
+**Tip:** always read the preview before using `--execute`.
 
 ## License
 
